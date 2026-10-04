@@ -52,16 +52,6 @@ var supportedModels = map[string]struct{}{
 	"gemma-4-31b-it":   {},
 }
 
-type translationRequest struct {
-	APIKey     string `json:"apiKey"`
-	Model      string `json:"model"`
-	SourceLang string `json:"sourceLang"`
-	TargetLang string `json:"targetLang"`
-	Text       string `json:"text"`
-	FileName   string `json:"fileName,omitempty"`
-	Document   []byte `json:"document,omitempty"`
-}
-
 type translationResponse struct {
 	Text       string `json:"text"`
 	PDF        []byte `json:"pdf"`

@@ -3,62 +3,60 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
-	"log"
-	"os"
+	"strings"
 
 	"google.golang.org/genai"
 	"google.golang.org/genai/interactions/models/interactions"
 	"google.golang.org/genai/interactions/models/operations"
 )
 
-func TestTrans(apikey string) {
+func TestTrans(req translationRequest) (translationResponse, error) {
 	ctx := context.Background()
-	// 1. Khởi tạo GenAI Client (đảm bảo đã cài đặt GEMINI_API_KEY trong biến môi trường)
+	if strings.TrimSpace(req.APIKey) == "" {
+		return translationResponse{}, errors.New("vui lòng nhập Gemini API key")
+	}
+	if len(req.Document) == 0 {
+		return translationResponse{}, errors.New("vui lòng đính kèm tài liệu")
+	}
+
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apikey,
+		APIKey:  req.APIKey,
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
-		log.Fatal("Lỗi khởi tạo client:", err)
+		return translationResponse{}, fmt.Errorf("không thể khởi tạo Gemini client: %w", err)
 	}
 
-	// 2. Đọc file tài liệu (PDF) và mã hóa sang Base64
-	pdfPath := "exam.pdf" // Thay đường dẫn tới file tài liệu của bạn
-	pdfBytes, err := os.ReadFile(pdfPath)
-	if err != nil {
-		log.Fatal("Lỗi đọc file:", err)
+	sourceLang := req.SourceLang
+	if strings.TrimSpace(sourceLang) == "" {
+		sourceLang = "tự động phát hiện"
 	}
-	base64Pdf := base64.StdEncoding.EncodeToString(pdfBytes)
+	prompt := fmt.Sprintf("Hãy dịch toàn bộ nội dung của tài liệu này từ %s sang %s. Giữ nguyên cấu trúc văn bản và định dạng nếu có. Chỉ trả về bản dịch.", sourceLang, req.TargetLang)
+	base64Document := base64.StdEncoding.EncodeToString(req.Document)
 	input := interactions.NewInteractionsInput([]interactions.Content{
-		// Nạp tài liệu PDF
 		interactions.NewContent(interactions.DocumentContent{
-			Data:     genai.Ptr(base64Pdf),
+			Data:     genai.Ptr(base64Document),
 			MimeType: interactions.DocumentContentMimeTypeApplicationPdf.ToPointer(),
 		}),
-		// Prompt yêu cầu dịch thuật
 		interactions.NewContent(interactions.TextContent{
-			Text: "Hãy dịch toàn bộ nội dung của tài liệu này sang Tiếng Anh. Giữ nguyên cấu trúc văn bản và định dạng nếu có.",
+			Text: prompt,
 		}),
 	})
-	// 3. Gửi yêu cầu dịch tài liệu tới Gemini API
 	res, err := client.Interactions.Create(ctx, operations.CreateInteractionRequest{
 		Body: operations.NewCreateInteractionRequestBody(interactions.CreateModelInteraction{
-			Model: interactions.Model("gemini-3.7-flash"),
+			Model: interactions.Model(req.Model),
 			Input: &input,
 		}),
 	})
 	if err != nil {
-		fmt.Println(err)
-		log.Fatal("Lỗi gửi yêu cầu interaction:", err)
+		return translationResponse{}, fmt.Errorf("lỗi gửi yêu cầu interaction: %w", err)
 	}
 
-	// 4. In kết quả tài liệu đã được dịch
 	interactionJSON := NewInteractionsJSON(res.Interaction)
 	if outputText := interactionJSON.GetOutputText(); outputText != nil {
-		fmt.Println("=== NỘI DUNG TÀI LIỆU SAU KHI DỊCH ===")
-		fmt.Println(*outputText)
-	} else {
-		log.Println("Gemini không trả về nội dung văn bản trong interaction")
+		return translationResponse{Text: *outputText}, nil
 	}
+	return translationResponse{}, errors.New("Gemini không trả về nội dung văn bản trong interaction")
 }

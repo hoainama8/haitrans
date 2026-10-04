@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"image/color"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -20,6 +19,37 @@ import (
 )
 
 const applicationID = "vn.hoainam.fynetranslator"
+
+type translationRequest struct {
+	APIKey     string
+	SourceLang string
+	TargetLang string
+	Text       string
+	FileName   string
+	Model      string
+	Document   []byte
+}
+
+type translationResult struct {
+	Text       string
+	OutputFile string
+}
+
+func TestTranslate(req translationRequest) (translationResult, error) {
+	if strings.TrimSpace(req.Text) == "" && len(req.Document) == 0 {
+		return translationResult{}, fmt.Errorf("không có nội dung để dịch")
+	}
+
+	responseText := req.Text
+	if strings.TrimSpace(responseText) == "" && len(req.Document) > 0 {
+		responseText = fmt.Sprintf("[Tệp %s đã được nhận. Nội dung đầu vào là tài liệu phụ thuộc định dạng.]", req.FileName)
+	}
+
+	return translationResult{
+		Text:       fmt.Sprintf("[%s -> %s] %s", req.SourceLang, req.TargetLang, responseText),
+		OutputFile: "",
+	}, nil
+}
 
 // ============================================================================
 // HÀM ĐÍNH KÈM FILE TÍCH HỢP QUẢN LÝ FILE
@@ -285,18 +315,21 @@ func main() {
 			// its format before forwarding anything to Gemini.
 			request.Text = ""
 		}
-
+		fmt.Println(request)
 		progressBar.Show()
 		translateBtn.Disable()
 
 		go func() {
-			response, err := sendTranslation(backend, request)
+			response, err := TestTrans(request)
+			//fmt.Println("req", request)
+			//fmt.Println("response:", response)
 			fyne.Do(func() {
 				progressBar.Hide()
 				translateBtn.Enable()
 				refreshInputDocuments()
 				refreshOutputDocuments()
 				if err != nil {
+					fmt.Println(err)
 					dialog.ShowError(err, myWindow)
 					return
 				}
@@ -356,3 +389,9 @@ func showSavedTranslation(win fyne.Window, outputFile string) {
 	dialog.ShowInformation("Thành công", message, win)
 
 }
+
+// func main() {
+// 	//Boxlayout()
+// 	//Borderlayout()
+// 	Contain()
+// }

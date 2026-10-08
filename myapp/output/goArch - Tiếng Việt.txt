@@ -1,0 +1,61 @@
+# SIMD đặc thù theo kiến trúc trong Go
+Junyang Shao và David Chase, ngày 2 tháng 10 năm 2026
+
+Kể từ phiên bản Go 1.26, chúng tôi đã hỗ trợ một API SIMD thực nghiệm cho amd64. Hiện tại trong Go 1.27, chúng tôi hỗ trợ thêm hai kiến trúc nữa: arm64 và wasm.
+
+Có thể truy cập các API mới bằng cách thiết lập `GOEXPERIMENT=simd` khi xây dựng chương trình. Chúng được định nghĩa trong gói `simd/archsimd`.
+
+`archsimd` là cơ sở hạ tầng cấp thấp hơn mà `simd` xây dựng dựa trên, về cơ bản là lớp intrinsics trong các ngôn ngữ khác. Đối với các hoạt động đặc thù chỉ tồn tại trên một kiến trúc cụ thể, người dùng có thể truy cập chúng bằng cách chuyển từ `simd` sang `archsimd` (thông qua `ToArch` và `<Types>FromArch`). Để biết thêm chi tiết, vui lòng tham khảo bài viết blog về `simd`.
+
+Đối với những độc giả đã có kiến thức về SIMD intrinsics trong các ngôn ngữ khác, bạn có thể thấy rằng API `archsimd` của chúng tôi không phản chiếu trực tiếp các chỉ thị phần cứng bên dưới:
+
+* Chúng tôi đặt tên API một cách dễ hiểu: ví dụ, thay vì `_mm512_slli_epi64`, chúng tôi chỉ gọi là `ShiftAllLeft`.
+* Chúng tôi để một số chi tiết kiến trúc cho các tối ưu hóa của trình biên dịch thay vì phơi bày chúng trong API: ví dụ, thay vì `_mm512_maskz_add_ps(m, x, y)`, chúng tôi tối ưu hóa `x.Add(y).Masked(m)` thành cùng một chỉ thị.
+
+Những quyết định thiết kế này làm cho API của chúng tôi nhỏ gọn và dễ tiếp cận hơn, đồng thời cũng giúp việc triển khai `simd` dễ dàng hơn nhiều.
+
+Đối với những độc giả không có kiến thức trước đó về SIMD intrinsics, chúng tôi hy vọng API cấp thấp của mình sẽ là một hành trình tự nhiên và dễ chịu đối với bạn.
+
+Vui lòng chia sẻ phản hồi và ý kiến của bạn. Bất kỳ điều gì về khả năng sử dụng, hiệu suất, v.v., đều được trân trọng. Issue chính cho dự án này là #73787.
+
+### SIMD là gì?
+
+SIMD viết tắt của Single Instruction, Multiple Data (Một chỉ thị, nhiều dữ liệu). Các chỉ thị SIMD hoạt động trên các thanh ghi rộng (128-bit, 256-bit hoặc hơn) chứa nhiều phần tử từ 8 đến 64-bit, thực hiện các hoạt động trên tất cả các phần tử song song. Các thanh ghi rộng hơn và thực thi song song cung cấp một sự gia tăng hiệu suất đáng kể cho các thuật toán có thể tận dụng chúng.
+
+Cho đến nay, bất kỳ ai muốn sử dụng SIMD trong Go đều phải chịu đựng sự khó khăn khi viết ngôn ngữ assembly. Gói `archsimd` mới ra đời để thay đổi điều đó.
+
+### Mục tiêu
+
+Mục tiêu là hỗ trợ càng nhiều chỉ thị SIMD trên các kiến trúc khác nhau càng tốt. Hiện tại, chúng tôi có amd64, arm64 và wasm. Hỗ trợ amd64 của chúng tôi có bề mặt API lớn nhất, bao gồm AVX, AVX2 và nhiều phần mở rộng AVX-512. Hỗ trợ arm64 hiện tại bao gồm NEON, với SVE và một số SVE2 đang được triển khai. Hỗ trợ wasm của chúng tôi cũng gần như hoàn tất, nhờ vào trừu tượng hóa SIMD 128-bit được định nghĩa rõ ràng.
+
+Một số người dùng có thể quan tâm đến các phần mở rộng ma trận trên một số kiến trúc nhất định, chẳng hạn như AMX và SME. Chúng tôi vẫn chưa quyết định đầy đủ về cách biểu diễn ma trận hiệu quả trong Go, vì vậy chúng hiện chưa được hỗ trợ, nhưng chúng tôi có thể hỗ trợ chúng trong tương lai.
+
+### Thiết kế và Đặt tên API
+
+#### Kiểu dữ liệu
+
+API SIMD đặc thù theo kiến trúc được nhập từ `simd/archsimd`. `archsimd` sử dụng các kiểu struct riêng biệt, chẳng hạn như `Float32x4`, `Int32x8`, hoặc `Uint8x16`, để báo hiệu hình dạng và kiểu phần tử của mỗi vector, và định nghĩa các hoạt động dưới dạng phương thức trên các kiểu đó. Tại thời điểm này, `archsimd` chỉ hỗ trợ các phần mở rộng vector có độ dài cố định. Các phần mở rộng vector có thể mở rộng (scalable) như arm64 SVE và RVV sẽ có các kiểu struct khác để biểu diễn các vector. Các kiểu mặt nạ (mask) cũng đi kèm với hình dạng giống như vector, ví dụ: `Mask32x4`.
+
+#### Phương thức
+
+Trên các độ rộng vector, kiểu phần tử và kiến trúc khác nhau, chúng tôi sử dụng cùng một tên phương thức bất cứ khi nào các hoạt động là đồng nhất về mặt ngữ nghĩa:
+
+```bash
+GOEXPERIMENT=simd go test simd/archsimd/...
+```
+
+Bạn cũng có thể kiểm tra chéo wasm (hoặc amd64 thông qua mô phỏng Rosetta trên Apple Silicon) bằng cách thiết lập `GOARCH`:
+
+```bash
+# Chạy các bài kiểm tra SIMD wasm bằng một runtime WASI:
+GOOS=wasip1 GOARCH=wasm GOEXPERIMENT=simd go test simd/archsimd/...
+
+# Hoặc chạy các bài kiểm tra amd64 AVX2 trên Apple Silicon thông qua Rosetta:
+GOARCH=amd64 GOEXPERIMENT=simd go test simd/archsimd/...
+```
+
+Chúng tôi quan tâm đến mọi loại phản hồi! Những người dùng sớm đã giúp chúng tôi phát hiện lỗi (chẳng hạn như #77582) và xác định những nơi mà việc tạo mã hoặc tính tiện dụng của API có thể được cải thiện. Chúng tôi đã cố gắng hết sức để chọn các tên gọi rõ ràng, nhất quán và bao quát các chỉ thị hữu ích nhất, nhưng `archsimd` là một bề mặt API khổng lồ và luôn có chỗ để cải thiện.
+
+### Công việc trong tương lai
+
+Đối với Go 1.28 và các phiên bản tiếp theo, chúng tôi đang tích cực làm việc để hoàn thiện hỗ trợ arm64 SVE và SVE2 trong `archsimd` (giới thiệu các kiểu vector có thể mở rộng không phụ thuộc vào độ rộng như `archsimd.Float32s` được hỗ trợ trực tiếp bởi các thanh ghi SVE và predicate của phần cứng) và kết nối nó vào `simd`. Chúng tôi cũng có kế hoạch mở rộng `archsimd` sang các kiến trúc bổ sung như riscv64, ppc64, s390x và loong64, cải thiện việc nâng cấp thanh ghi cho các kiểu hỗn hợp, và tiếp tục bổ sung các chỉ thị cũng như tối ưu hóa trình biên dịch dựa trên phản hồi từ cộng đồng.

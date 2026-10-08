@@ -12,13 +12,13 @@ import (
 	"google.golang.org/genai/interactions/models/operations"
 )
 
-func TestTrans(req translationRequest) (translationResponse, error) {
+func TestTrans(req translationRequest) (*InteractionsJSON, error) {
 	ctx := context.Background()
 	if strings.TrimSpace(req.APIKey) == "" {
-		return translationResponse{}, errors.New("vui lòng nhập Gemini API key")
+		return nil, errors.New("vui lòng nhập Gemini API key")
 	}
 	if len(req.Document) == 0 {
-		return translationResponse{}, errors.New("vui lòng đính kèm tài liệu")
+		return nil, errors.New("vui lòng đính kèm tài liệu")
 	}
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -26,19 +26,24 @@ func TestTrans(req translationRequest) (translationResponse, error) {
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
-		return translationResponse{}, fmt.Errorf("không thể khởi tạo Gemini client: %w", err)
+		return nil, fmt.Errorf("không thể khởi tạo Gemini client: %w", err)
 	}
 
 	sourceLang := req.SourceLang
 	if strings.TrimSpace(sourceLang) == "" {
 		sourceLang = "tự động phát hiện"
 	}
-	prompt := fmt.Sprintf("Hãy dịch toàn bộ nội dung của tài liệu này từ %s sang %s. Giữ nguyên cấu trúc văn bản và định dạng nếu có. Chỉ trả về bản dịch.", sourceLang, req.TargetLang)
+	prompt := BuildTextPrompt(req)
+	//fmt.Sprintf("Hãy dịch toàn bộ nội dung của tài liệu này từ %s sang %s. Giữ nguyên cấu trúc văn bản và định dạng nếu có. Chỉ trả về bản dịch.", sourceLang, req.TargetLang)
 	base64Document := base64.StdEncoding.EncodeToString(req.Document)
+	fileType := req.FileType
+	if fileType == "" {
+		fileType = mimeTypeForFile(req.FileName)
+	}
 	input := interactions.NewInteractionsInput([]interactions.Content{
 		interactions.NewContent(interactions.DocumentContent{
 			Data:     genai.Ptr(base64Document),
-			MimeType: interactions.DocumentContentMimeTypeApplicationPdf.ToPointer(),
+			MimeType: interactions.DocumentContentMimeType(fileType).ToPointer(),
 		}),
 		interactions.NewContent(interactions.TextContent{
 			Text: prompt,
@@ -51,12 +56,13 @@ func TestTrans(req translationRequest) (translationResponse, error) {
 		}),
 	})
 	if err != nil {
-		return translationResponse{}, fmt.Errorf("lỗi gửi yêu cầu interaction: %w", err)
+		return nil, fmt.Errorf("lỗi gửi yêu cầu interaction: %w", err)
 	}
 
 	interactionJSON := NewInteractionsJSON(res.Interaction)
 	if outputText := interactionJSON.GetOutputText(); outputText != nil {
-		return translationResponse{Text: *outputText}, nil
+		fmt.Println(*outputText)
+		return interactionJSON, nil
 	}
-	return translationResponse{}, errors.New("Gemini không trả về nội dung văn bản trong interaction")
+	return nil, errors.New("Gemini không trả về nội dung văn bản trong interaction")
 }

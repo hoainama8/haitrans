@@ -1,0 +1,12 @@
+Bắt đầu nhanh
+Sử dụng bộ công cụ Fyne để xây dựng các ứng dụng đa nền tảng là rất đơn giản, nhưng đòi hỏi phải cài đặt một số công cụ trước khi bạn có thể bắt đầu. Nếu máy tính của bạn đã được thiết lập để phát triển với Go thì các bước sau có thể không cần thiết, nhưng chúng tôi khuyên bạn nên đọc qua các mẹo dành cho hệ điều hành của mình để đề phòng. Nếu các bước tiếp theo trong hướng dẫn này gặp lỗi, bạn nên xem lại các điều kiện tiên quyết bên dưới.
+Điều kiện tiên quyết 
+Fyne yêu cầu 3 yếu tố cơ bản: các công cụ Go (tối thiểu là phiên bản 1.19), một trình biên dịch C (để kết nối với driver đồ họa của hệ thống) và một driver đồ họa hệ thống. Các hướng dẫn sẽ khác nhau tùy thuộc vào hệ điều hành của bạn, hãy chọn tab thích hợp bên dưới để xem hướng dẫn cài đặt.
+Lưu ý rằng các bước này chỉ cần thiết cho quá trình phát triển - các ứng dụng Fyne của bạn sẽ không yêu cầu bất kỳ thiết lập hoặc cài đặt phụ thuộc nào đối với người dùng cuối!
+Các nền tảng được hỗ trợ xem tại: wiki/Supported-Platforms
+WindowsmacOSLinuxBSDAndroidiOS
+Bạn sẽ cần cài đặt Go, GCC và các tệp tiêu đề (header) của thư viện đồ họa bằng trình quản lý gói của mình. Hãy chọn lệnh tương ứng với bản phân phối của bạn:
+Debian, Ubuntu và Raspberry Pi OS 
+sudo apt-get install golang gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+Fedora 
+sudo dnf install golang golang-misc gcc libXcursor-devel libXrandr-devel mesa-libGL-devel libXi-devel libXinerama-devel libXxf86vm-devel libxkbcommon-devel wayland-devel

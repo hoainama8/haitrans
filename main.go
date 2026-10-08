@@ -65,25 +65,12 @@ func main() {
 	rightColumn := createOutputColumn(myApp, outputEditor)
 
 	// CỘT 2: GIỮA
-	inputDocuments, refreshInputDocuments := MakeDocumentList(inputDirectory)
-	outputDocuments, refreshOutputDocuments := MakeDocumentList(outputDirectory)
-	centerColumn := Control(inputEditor, outputEditor, myWindow, inputDocuments, outputDocuments, refreshInputDocuments, refreshOutputDocuments)
+	centerColumn := Control(inputEditor, outputEditor, myWindow)
 	mainContent := container.NewGridWithRows(3,
 		leftColumn,
 		centerColumn,
 		rightColumn,
 	)
-
-	//var err error
-	//backend, err = startLocalBackend()
-	// if err != nil {
-	// 	dialog.ShowError(err, myWindow)
-	// 	myWindow.ShowAndRun()
-	// 	return
-	// }
-	//defer backend.close()
-	refreshInputDocuments()
-	refreshOutputDocuments()
 
 	myWindow.SetContent(container.NewPadded(mainContent))
 	myWindow.Resize(fyne.NewSize(1200, 650))

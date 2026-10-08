@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -21,7 +22,23 @@ type attachedDocument struct {
 var document *attachedDocument
 var sourceName string
 
-func Control(inputEditor *widget.Entry, outputEditor *widget.Entry, myWindow fyne.Window, inputDocuments, outputDocuments fyne.CanvasObject, refreshInputDocuments func(), refreshOutputDocuments func()) fyne.CanvasObject {
+func Control(inputEditor *widget.Entry, outputEditor *widget.Entry, myWindow fyne.Window) fyne.CanvasObject {
+	tokenUsagePath, pathErr := defaultTokenUsagePath()
+	if pathErr != nil {
+		tokenUsagePath = "token_usage.json"
+	}
+	usageTracker, trackerErr := newTokenUsageTracker(tokenUsagePath)
+	if trackerErr != nil {
+		usageTracker = &tokenUsageTracker{filePath: tokenUsagePath}
+	}
+	sessionTokensLabel := widget.NewLabel(strconv.Itoa(usageTracker.sessionTokens))
+	totalTokensLabel := widget.NewLabel(strconv.Itoa(usageTracker.totalTokens))
+	if pathErr != nil {
+		dialog.ShowError(pathErr, myWindow)
+	}
+	if trackerErr != nil {
+		dialog.ShowError(trackerErr, myWindow)
+	}
 
 	attachmentSection := MakeFileAttachmentCard(myWindow, func(fileName string, content []byte) {
 		sourceName = fileName
@@ -94,15 +111,20 @@ func Control(inputEditor *widget.Entry, outputEditor *widget.Entry, myWindow fyn
 			fyne.Do(func() {
 				progressBar.Hide()
 				translateBtn.Enable()
-				refreshInputDocuments()
 				if err != nil {
 					fmt.Println(err)
 					dialog.ShowError(err, myWindow)
 					return
 				}
+				if usage := response.GetUsage(); usage != nil && usage.GetTotalTokens() != nil {
+					if err := usageTracker.Add(*usage.GetTotalTokens()); err != nil {
+						dialog.ShowError(err, myWindow)
+					}
+					sessionTokensLabel.SetText(strconv.Itoa(usageTracker.sessionTokens))
+					totalTokensLabel.SetText(strconv.Itoa(usageTracker.totalTokens))
+				}
 				outputEditor.SetText(*response.GetOutputText())
 				showSavedTranslation(myWindow, request, *response.GetOutputText())
-				refreshOutputDocuments()
 			})
 		}()
 	})
@@ -119,18 +141,16 @@ func Control(inputEditor *widget.Entry, outputEditor *widget.Entry, myWindow fyn
 	bgColor := color.NRGBA{R: 92, G: 51, B: 23, A: 255} // Màu hổ phách // Màu xanh nhạt
 	//bg := canvas.NewRectangle(bgColor)
 	center1 := container.NewVBox(
-
 		container.NewCenter(attachmentSection),
 		optionsForm,
 		container.NewCenter(translateBtn),
-	)
-	// center1_green := container.NewStack(bg, center1)
-	centerColumn := container.NewGridWithColumns(2, center1, container.NewVBox(
-		//,
 		progressBar,
-		widget.NewCard("Tài liệu gốc", "Danh sách file trong thư mục input/", inputDocuments),
-		widget.NewCard("Tài liệu dịch", "Danh sách file trong thư mục output/", outputDocuments),
-	))
+	)
+	center2 := container.NewVBox(
+		widget.NewCard("Token phiên này", "Số token đã dùng từ khi mở ứng dụng", sessionTokensLabel),
+		widget.NewCard("Tổng token đã dùng", "Tích lũy qua các lần sử dụng", totalTokensLabel),
+	)
+	centerColumn := container.NewGridWithColumns(2, center1, center2)
 	center_green := container.NewStack(canvas.NewRectangle(bgColor), centerColumn)
 	return center_green
 }

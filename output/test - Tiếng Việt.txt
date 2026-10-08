@@ -1,3 +1,15 @@
-Các cửa sổ được tạo bằng cách sử dụng App.NewWindow() và cần được hiển thị bằng hàm Show(). Phương thức hỗ trợ ShowAndRun() trên fyne.Window cho phép bạn hiển thị cửa sổ và chạy ứng dụng cùng một lúc.
-
-Theo mặc định, cửa sổ sẽ có kích thước phù hợp để hiển thị nội dung của nó bằng cách kiểm tra hàm MinSize() (sẽ nói thêm về phần này trong các ví dụ sau). Bạn có thể đặt kích thước lớn hơn bằng cách gọi phương thức Window.Resize(). Giá trị được truyền vào đây là một fyne.Size chứa chiều rộng và chiều cao sử dụng các pixel độc lập với thiết bị (nghĩa là nó sẽ hiển thị như nhau trên các thiết bị khác nhau), ví dụ để đặt cửa sổ có hình vuông theo mặc định, chúng ta có thể:
+==Start of PDF==
+page 1==Screenshot for page 1==
+==Start of OCR for page 1==
+Các cửa sổ được tạo bằng App.NewWindow() và cần được hiển thị bằng hàm Show().
+Phương thức trợ giúp ShowAndRun() trên fyne.Window cho phép bạn hiển thị
+cửa sổ của mình và chạy ứng dụng cùng một lúc.
+Theo mặc định, một cửa sổ sẽ có kích thước phù hợp để hiển thị nội dung của nó bằng cách
+kiểm tra hàm MinSize() (sẽ nói thêm về điều này trong các ví dụ sau).
+Bạn có thể đặt kích thước lớn hơn bằng cách gọi phương thức Window.Resize().
+Được truyền vào phương thức này là một fyne.Size chứa chiều rộng và chiều cao
+sử dụng các pixel độc lập với thiết bị (có nghĩa là nó sẽ giống nhau
+trên các thiết bị khác nhau), ví dụ để làm cho một cửa sổ có hình vuông theo
+mặc định chúng ta có thể: 
+==End of OCR for page 1==
+==End of PDF==

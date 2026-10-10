@@ -54,7 +54,7 @@ func Control(inputEditor *widget.Entry, outputEditor *widget.Entry, myWindow fyn
 			data: append([]byte(nil), content...),
 		}
 		sourceName = fileName
-		inputEditor.SetText(string(document.data))
+		inputEditor.SetText("")
 		inputEditor.SetPlaceHolder("Tài liệu " + fileName + " đã đính kèm để dịch...")
 
 	})
@@ -97,10 +97,6 @@ func Control(inputEditor *widget.Entry, outputEditor *widget.Entry, myWindow fyn
 			request.FileName = document.name
 			request.FileType = mimeTypeForFile(document.name)
 			request.Document = append([]byte(nil), document.data...)
-			// Backend uses the uploaded bytes as the source of truth and checks
-			// its format before forwarding anything to Gemini.
-			request.Text = string(document.data)
-
 		}
 		fmt.Println(request.Model, request.SourceLang, request.TargetLang, request.FileName, len(request.Document), len(request.Text))
 		progressBar.Show()

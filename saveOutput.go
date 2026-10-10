@@ -11,7 +11,12 @@ import (
 )
 
 func showSavedTranslation(win fyne.Window, req translationRequest, translatedText string) {
-	textFile, err := saveTranslationText(outputDirectory, req.FileName, req.TargetLang, translatedText)
+	directories, err := defaultApplicationDirectories()
+	if err != nil {
+		dialog.ShowError(err, win)
+		return
+	}
+	textFile, err := saveTranslationText(directories.output, req.FileName, req.TargetLang, translatedText)
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("Không thể lưu tệp dịch: %v", err), win)
 		return

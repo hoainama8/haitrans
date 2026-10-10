@@ -19,11 +19,6 @@ const (
 	maxDocTextSize         = 100 << 20
 )
 
-const (
-	inputDirectory  = "input"
-	outputDirectory = "output"
-)
-
 var supportedModels = map[string]struct{}{
 	"gemini-3.8-flash": {},
 	"gemma-4-31b-it":   {},

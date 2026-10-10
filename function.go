@@ -114,6 +114,14 @@ func MakeFileAttachmentCard(
 
 			fyne.Do(func() {
 				fileName := fileURI.Name()
+				directories, err := defaultApplicationDirectories()
+				if err == nil {
+					_, err = saveUploadedInput(directories.input, fileName, data)
+				}
+				if err != nil {
+					dialog.ShowError(err, win)
+					return
+				}
 				statusLabel.SetText(fmt.Sprintf("Đã đính kèm: %s (%.1f KB)", fileName, float64(len(data))/1024.0))
 				statusLabel.TextStyle = fyne.TextStyle{Bold: true}
 

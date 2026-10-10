@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"mime"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -49,7 +51,26 @@ func mimeTypeForFile(fileName string) string {
 // ============================================================================
 
 func main() {
-
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "không thể tìm thư mục home người dùng: %v\n", err)
+		return
+	}
+	directories, err := applicationDirectoriesFor(homeDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	for _, directory := range []string{directories.root, directories.input, directories.output} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			fmt.Fprintf(os.Stderr, "không thể tạo thư mục %s: %v\n", directory, err)
+			return
+		}
+	}
+	if _, err := newTokenUsageTracker(directories.tokenUsage); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	myApp := app.NewWithID(applicationID)
 	myWindow := myApp.NewWindow("Phần Mềm Dịch Thuật AI Đa Ngôn Ngữ")
 	//var backend *localBackend

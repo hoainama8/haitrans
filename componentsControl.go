@@ -117,7 +117,7 @@ func Control(inputEditor *widget.Entry, outputEditor *widget.Entry, myWindow fyn
 					return
 				}
 				if usage := response.GetUsage(); usage != nil && usage.GetTotalTokens() != nil {
-					if err := usageTracker.Add(*usage.GetTotalTokens()); err != nil {
+					if err := usageTracker.Add(request.Model, *usage.GetTotalTokens()); err != nil {
 						dialog.ShowError(err, myWindow)
 					}
 					sessionTokensLabel.SetText(strconv.Itoa(usageTracker.sessionTokens))

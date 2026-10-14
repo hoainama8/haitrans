@@ -1,0 +1,215 @@
+**SIMD đặc thù cho kiến trúc trong Go**
+Junyang Shao và David Chase
+Ngày 2 tháng 10 năm 2026
+
+Kể từ Go 1.26, chúng tôi đã hỗ trợ một API SIMD thử nghiệm cho amd64. Giờ đây, trong Go 1.27, chúng tôi hỗ trợ thêm hai kiến trúc nữa: arm64 và wasm.
+
+Các API mới có thể được truy cập bằng cách thiết lập `GOEXPERIMENT=simd` khi xây dựng chương trình. Chúng được định nghĩa trong gói `simd/archsimd`.
+
+`archsimd` là cơ sở hạ tầng cấp thấp hơn mà `simd` xây dựng dựa trên đó, về cơ bản là lớp intrinsics (hàm nội tại) trong các ngôn ngữ khác. Đối với các thao tác đặc thù chỉ tồn tại trên một kiến trúc cụ thể, người dùng có thể truy cập chúng bằng cách chuyển đổi từ `simd` sang `archsimd` (thông qua `ToArch` và `<Types>FromArch`). Để biết chi tiết, vui lòng tham khảo bài đăng trên blog về `simd`.
+
+Đối với những độc giả đã có kiến thức trước đó về SIMD intrinsics trong các ngôn ngữ khác, bạn có thể thấy rằng API `archsimd` của chúng tôi không phản chiếu trực tiếp các hướng dẫn phần cứng bên dưới:
+
+*   Chúng tôi đặt tên API dễ hiểu: ví dụ, thay vì `_mm512_slli_epi64`, chúng tôi chỉ gọi nó là `ShiftAllLeft`.
+*   Chúng tôi để một số chi tiết kiến trúc cho các tối ưu hóa của trình biên dịch thay vì phơi bày chúng trong API: ví dụ, thay vì `_mm512_maskz_add_ps(m, x, y)`, chúng tôi tối ưu hóa `x.Add(y).Masked(m)` thành cùng một hướng dẫn.
+
+Những quyết định thiết kế này giúp API của chúng tôi nhỏ gọn và dễ tiếp cận hơn, đồng thời giúp việc triển khai `simd` trở nên dễ dàng hơn nhiều.
+
+Đối với những độc giả chưa có kiến thức về SIMD intrinsics, chúng tôi hy vọng API cấp thấp của chúng tôi sẽ là một hành trình tự nhiên và dễ chịu đối với bạn.
+
+Vui lòng chia sẻ phản hồi và ý kiến của bạn. Bất kỳ điều gì về khả năng sử dụng, hiệu suất, v.v., đều được trân trọng. Vấn đề chính cho dự án này là #73787.
+
+**SIMD là gì ¶**
+SIMD viết tắt của Single Instruction, Multiple Data (Một lệnh, nhiều dữ liệu). Các hướng dẫn SIMD hoạt động trên các thanh ghi rộng (128-bit, 256-bit hoặc hơn) chứa nhiều phần tử từ 8 đến 64-bit, thực hiện các thao tác trên tất cả các phần tử song song. Các thanh ghi rộng hơn và thực thi song song cung cấp một cú hích hiệu suất đáng kể cho các thuật toán có thể tận dụng chúng.
+
+Cho đến nay, bất kỳ ai muốn sử dụng SIMD trong Go đều phải chịu sự khó khăn của việc viết ngôn ngữ assembly. Gói `archsimd` mới ra đời để thay đổi điều đó.
+
+**Mục tiêu ¶**
+Mục tiêu là hỗ trợ càng nhiều hướng dẫn SIMD trên các kiến trúc khác nhau càng tốt. Hiện tại, chúng tôi có sẵn amd64, arm64 và wasm. Hỗ trợ amd64 của chúng tôi có bề mặt API lớn nhất, bao gồm AVX, AVX2 và nhiều phần mở rộng AVX-512. Hỗ trợ arm64 của chúng tôi hiện bao gồm NEON, với SVE và một số SVE2 đang được triển khai. Hỗ trợ wasm của chúng tôi cũng gần như hoàn tất, nhờ vào sự trừu tượng SIMD 128-bit được định nghĩa rõ ràng của nó.
+
+Một số người dùng có thể quan tâm đến các phần mở rộng ma trận trên một số kiến trúc nhất định, chẳng hạn như AMX và SME. Chúng tôi vẫn chưa quyết định hoàn toàn cách biểu diễn ma trận hiệu quả trong Go, vì vậy chúng hiện chưa được hỗ trợ, nhưng chúng tôi có thể hỗ trợ chúng trong tương lai.
+
+**Thiết kế và Đặt tên API ¶**
+
+**Kiểu dữ liệu (Types) ¶**
+API SIMD đặc thù cho kiến trúc được nhập từ `simd/archsimd`.
+`archsimd` sử dụng các kiểu struct riêng biệt, chẳng hạn như `Float32x4`, `Int32x8`, hoặc `Uint8x16`, để báo hiệu hình dạng và kiểu phần tử của mỗi vector, và định nghĩa các thao tác dưới dạng phương thức trên các kiểu đó. Tại thời điểm này, `archsimd` chỉ hỗ trợ các phần mở rộng vector có độ rộng cố định. Các phần mở rộng vector có thể mở rộng như arm64 SVE và RVV sẽ có các kiểu struct khác để biểu diễn vector. Các kiểu Mask cũng có hình dạng giống vector, ví dụ: `Mask32x4`.
+
+**Phương thức (Methods) ¶**
+Trên các độ rộng vector, kiểu phần tử và kiến trúc khác nhau, chúng tôi sử dụng cùng một tên phương thức bất cứ khi nào các thao tác là giống nhau về mặt ngữ nghĩa:
+
+*   Bất kể độ rộng vector hay kiến trúc, phép cộng từng phần tử đơn giản là `x.Add(y)`; kiểu của `x` sẽ quyết định hướng dẫn nào được phát ra. Thay vì 18 tên hàm khác nhau cho phép cộng, chỉ có một tên phương thức duy nhất.
+*   Khi các hướng dẫn trên các kiến trúc khác nhau trông giống nhau khi nhìn thoáng qua nhưng khác nhau về hành vi trong các trường hợp biên, chúng tôi đặt cho chúng những tên riêng biệt để những khác biệt này không âm thầm gây lỗi cho bạn. Ví dụ, tra cứu bảng 16-byte trên amd64 (`VPSHUFB`) sẽ xóa byte đầu ra khi chỉ số là số âm (`index < 0`) và quay vòng modulo 16 nếu ngược lại, vì vậy chúng tôi gọi nó là `PermuteOrZero`. Trên arm64 NEON (`VTBL`) và wasm (`i8x16.swizzle`), bất kỳ chỉ số nào nằm ngoài phạm vi (`index < 0 || index >= 16`) đều xóa byte đầu ra, vì vậy chúng tôi gọi nó là `LookupOrZero`.
+*   Trên amd64, nhiều hướng dẫn 256-bit và 512-bit hoạt động độc lập trong các làn (lanes) 128-bit thay vì trên toàn bộ thanh ghi. Chúng tôi thêm hậu tố `Grouped` một cách rõ ràng cho các phương thức đó (chẳng hạn như `InterleaveLoGrouped` hoặc `PermuteOrZeroGrouped`) để làm rõ ranh giới làn 128-bit.
+
+Các phương thức yêu cầu một giá trị nhận (receiver), điều này không hoạt động cho việc tạo một vector từ bộ nhớ hoặc một giá trị vô hướng (scalar). Đối với những trường hợp đó, `archsimd` cung cấp các hàm cấp gói được đặt tên theo kiểu vector mục tiêu:
+
+*   **Slices (mặc định):** Trong Go 1.27, việc tải và lưu trữ slice sử dụng các tên ngắn nhất: `archsimd.LoadFloat32x4(s []float32) Float32x4` và `x.Store(s []float32)`. Đối với các phần tử đuôi có thể ngắn hơn một vector đầy đủ, `archsimd.LoadFloat32x4Part(s []float32) (Float32x4, int)` sẽ điền số không vào các làn còn lại và trả về số lượng phần tử đã được tải, đi kèm với `x.StorePart(s []float32) int`.
+*   **Mảng và Broadcasts:** Các con trỏ mảng có kích thước cố định sử dụng hậu tố `Array` (`archsimd.LoadFloat32x4Array(y *[4]float32)` và `x.StoreArray(y *[4]float32)`), và `archsimd.BroadcastFloat32x4(v float32)` sẽ broadcast một giá trị vô hướng cho tất cả các làn.
+
+**Tái định nghĩa kiểu (Type Reinterpretation) ¶**
+Tái định nghĩa là việc ép kiểu mà không tốn bất kỳ chi phí nào. Các thuật toán SIMD thường xuyên tái định nghĩa các bit giữa các kiểu phần tử và độ rộng khác nhau.
+
+Trong thử nghiệm Go 1.26, chúng tôi đã triển khai điều này bằng các phương thức `As<Type>`, vốn bị ảnh hưởng bởi sự bùng nổ bậc hai của các cặp kiểu và không thể tổng quát hóa cho các vector không phụ thuộc độ rộng trong `simd` hoặc SVE.
+
+Trong Go 1.27, chúng tôi thay thế chúng bằng các chuyển đổi có thể kết hợp với chi phí bằng không:
+
+*   `ToBits()` tái định nghĩa một vector số nguyên có dấu hoặc float thành một vector số nguyên không dấu có cùng độ rộng phần tử (ví dụ: `Int32x4.ToBits() -> Uint32x4`), và `BitsToInt32()` / `BitsToFloat32()` để chuyển đổi ngược lại.
+*   `ReshapeToUint<W>s()` trên các vector không dấu sẽ thay đổi độ rộng phần tử trong cùng một độ rộng thanh ghi. Ví dụ, nếu `x` là một `archsimd.Uint8x16`, thì `x.ReshapeToUint32s().BitsToFloat32()` sẽ tái định nghĩa các bit của `x` thành một `archsimd.Float32x4` với chi phí thực thi bằng không.
+
+**Masks ¶**
+Các kiến trúc khác nhau mã hóa vector mask rất khác nhau, ví dụ: các thanh ghi mask `k` trên AVX-512, bitmask vector đầy đủ trên AVX/AVX2, NEON và wasm, và các thanh ghi predicate trên SVE. Để ẩn chi tiết phần cứng này, `archsimd` cung cấp các kiểu `Mask` mờ đục (chẳng hạn như `Mask32x4`) khớp với mỗi hình dạng vector:
+
+*   Các phép so sánh như `x.Greater(y)` tạo ra một `Mask`.
+*   `x.Masked(m)` xóa các phần tử nơi `m` là false, và `x.IfElse(m, y)` (thay thế cho `Merge` từ Go 1.26) chọn các phần tử từ `x` nơi `m` là true và từ `y` nơi `m` là false.
+*   Trình biên dịch thực hiện tối ưu hóa peephole cho các thao tác mask với các hướng dẫn xung quanh: trên AVX-512, `x.Add(y).Masked(m)` hoặc `x.Add(y).IfElse(m, z)` được biên dịch thành một hướng dẫn `VPADD` duy nhất có mask-zero hoặc merge-mask; trên AVX2, NEON hoặc wasm, nó sẽ hạ cấp xuống hướng dẫn AND bitwise hoặc hướng dẫn blend/bitselect thích hợp.
+
+**Ví dụ ¶**
+Các thuật toán có thể di chuyển (portable) như tích vô hướng (inner product) có thể dễ dàng được triển khai bằng cách sử dụng gói `simd` di động, như đã trình bày trong bài đăng blog về `simd` đi kèm. Tuy nhiên, chúng tôi vẫn phơi bày `archsimd` để tận dụng các hướng dẫn đặc thù cho kiến trúc, độc lạ, vốn không khớp với một API giao thoa di động, hoặc các hướng dẫn có thể thực hiện mọi thứ nhanh hơn những gì `simd` cung cấp.
+
+Trên amd64, phần mở rộng GFNI phơi bày các thao tác `GaloisFieldAffineTransform`. Tạm gác lại việc Galois Field là gì, các thao tác này làm một điều đơn giản:
+
+```go
+// Mỗi phần tử của A được hiểu là một ma trận 8 hàng
+// của các vector 8 bit.
+// Mỗi phần tử của x được hiểu là một vector 8 bit.
+// Đối số b tương tự là một vector 8 bit.
+// Kết quả là z[i] = (A[i/8] * x[i]) + b.
+//
+// Phép nhân ma trận * và phép cộng vector + tuân theo các quy tắc thông thường của
+// đại số tuyến tính,
+// nhưng dựa trên AND và XOR cho phép nhân * và phép cộng + vô hướng.
+//
+// Asm: VGF2P8AFFINEQB, CPU Feature: AVX512GFNI
+func (x Uint8x16) GaloisFieldAffineTransform(A Uint64x2, b uint8) Uint8x16
+```
+
+Mỗi ma trận bit 8x8 `A` được đóng gói theo từng hàng vào một `uint64` duy nhất. Vì bất kỳ tổ hợp tuyến tính hoặc hoán vị nào của 8 bit trong một byte đều có thể được viết dưới dạng ma trận bit 8x8, hướng dẫn duy nhất này là một "con dao Thụy Sĩ" cho việc thao tác bit cấp độ byte.
+
+Ví dụ, việc đảo ngược thứ tự bit của mỗi byte (`bits.Reverse8`) thường yêu cầu các bảng tra cứu nibble, mask, dịch bit và OR trong SIMD. Với `GaloisFieldAffineTransform`, chúng ta chỉ đơn giản là nhân mỗi byte với ma trận đơn vị phản chéo 8x8 (`0x8040201008040201`) để đảo ngược tất cả 8 bit của 64 byte cùng lúc trong một hướng dẫn duy nhất:
+
+```go
+/*
+ Ma trận bit 8x8 phản chéo (0x8040201008040201):
+ [ 0 0 0 0 0 0 0 1 ] [ x7 ] [ x0 ]
+ [ 0 0 0 0 0 0 1 0 ] [ x6 ] [ x1 ]
+ [ 0 0 0 0 0 0 1 0 ] [ x5 ] [ x2 ]
+ [ 0 0 0 0 1 0 0 0 ] * [ x4 ] = [ x3 ]
+ [ 0 0 0 1 0 0 0 0 ] [ x3 ] [ x4 ]
+ [ 0 0 1 0 0 0 0 0 ] [ x2 ] [ x5 ]
+ [ 0 1 0 0 0 0 0 0 ] [ x1 ] [ x6 ]
+ [ 1 0 0 0 0 0 0 0 ] [ x0 ] [ x7 ]
+*/
+
+func ReverseBits(dst, src []uint8) {
+    if !archsimd.X86.AVX512GFNI() {
+        // Một triển khai mô phỏng dự phòng chậm, chi tiết được lược bỏ.
+        slowReverseBits(dst, src)
+        return
+    }
+    if len(src) > len(dst) {
+        // Đảm bảo src và dst có cùng kích thước
+        src = src[:len(dst)]
+    }
+    revMatrix := archsimd.BroadcastUint64x8(0x8040201008040201)
+    var v archsimd.Uint8x64
+    var i int
+    for i = 0; i < len(src)-v.Len()+1; i += v.Len() {
+        v = archsimd.LoadUint8x64(src[i : i+v.Len()])
+        v.GaloisFieldAffineTransform(revMatrix, 0).Store(dst[i : i+v.Len()])
+    }
+    if i < len(src) {
+        v, _ = archsimd.LoadUint8x64Part(src[i:])
+        v.GaloisFieldAffineTransform(revMatrix, 0).StorePart(dst[i:])
+    }
+}
+```
+
+Một ví dụ khác là chuyển vị ma trận (matrix transpose). Trên amd64, các hướng dẫn hoán vị được thiết kế theo cách không di động, vì vậy việc sử dụng `simd` là rườm rà và có thể gây ra các mô phỏng (emulations). Một triển khai hiệu quả có thể được viết trực tiếp hơn trong `archsimd`. Ví dụ dưới đây chuyển vị một ma trận số nguyên 32-bit 8x8 trong các thanh ghi trên amd64 bằng cách sử dụng các lệnh interleave nhóm làn 128-bit của AVX2 (`InterleaveLoGrouped`, `InterleaveHiGrouped`) và các hoán vị xuyên làn (`ConcatPermuteScalarsGrouped`, `ConcatPermute128Scalars`):
+
+```go
+func Transpose8(a0, a1, a2, a3, a4, a5, a6, a7 archsimd.Int32x8) (
+    b0, b1, b2, b3, b4, b5, b6, b7 archsimd.Int32x8) {
+    if !archsimd.X86.AVX2() {
+        // Một triển khai mô phỏng dự phòng chậm, chi tiết được lược bỏ.
+        return slowTranspose8(a0, a1, a2, a3, a4, a5, a6, a7)
+    }
+    /*
+     LOW   HIGH
+     a0: abcd efgh
+     a1: ijkl mnop
+     a2: qrst uvwx
+     a3: 0123 4567
+     a4: ABCD EFGH
+     a5: IJKL MNOP
+     a6: QRST UVWX
+     a7: 89yz YZ$@
+    */
+    t0 := a0.InterleaveLoGrouped(a1) // t0 = aibj emfn
+    t1 := a0.InterleaveHiGrouped(a1) // t1 = ckdl gohp
+    t2 := a2.InterleaveLoGrouped(a3) // t2 = q0r1 u4v5
+    t3 := a2.InterleaveHiGrouped(a3) // t3 = s2t3 w6x7
+    t4 := a4.InterleaveLoGrouped(a5) // t4 = AIBJ EMFN
+    t5 := a4.InterleaveHiGrouped(a5) // t5 = CKDL GOHP
+    t6 := a6.InterleaveLoGrouped(a7) // t6 = Q8R9 UYVZ
+    t7 := a6.InterleaveHiGrouped(a7) // t7 = SyTz W$X@
+
+    a0 = t0.ConcatPermuteScalarsGrouped(0, 1, 4, 5, t2) // a0 = aiq0 emu4
+    a1 = t0.ConcatPermuteScalarsGrouped(2, 3, 6, 7, t2) // a1 = bjr1 fnv5
+    a2 = t1.ConcatPermuteScalarsGrouped(0, 1, 4, 5, t3) // a2 = cks2 gow6
+    a3 = t1.ConcatPermuteScalarsGrouped(2, 3, 6, 7, t3) // a3 = dlt3 hpx7
+    a4 = t4.ConcatPermuteScalarsGrouped(0, 1, 4, 5, t6) // a4 = AIQ8 EMUY
+    a5 = t4.ConcatPermuteScalarsGrouped(2, 3, 6, 7, t6) // a5 = BJR9 FNVZ
+    a6 = t5.ConcatPermuteScalarsGrouped(0, 1, 4, 5, t7) // a6 = CKSy GOW$
+    a7 = t5.ConcatPermuteScalarsGrouped(2, 3, 6, 7, t7) // a7 = DLTz HPX@
+
+    b0 = a0.ConcatPermute128Scalars(0, 2, a4) // b0 = aiq0 AIQ8
+    b1 = a1.ConcatPermute128Scalars(0, 2, a5) // b1 = bjr1 BJR9
+    b2 = a2.ConcatPermute128Scalars(0, 2, a6) // b2 = cks2 CKSy
+    b3 = a3.ConcatPermute128Scalars(0, 2, a7) // b3 = dlt3 DLTz
+    b4 = a0.ConcatPermute128Scalars(1, 3, a4) // b4 = emu4 EMUY
+    b5 = a1.ConcatPermute128Scalars(1, 3, a5) // b5 = fnv5 FNVZ
+    b6 = a2.ConcatPermute128Scalars(1, 3, a6) // b6 = gow6 GOW$
+    b7 = a3.ConcatPermute128Scalars(1, 3, a7) // b7 = hpx7 HPX@
+
+    return
+}
+```
+
+**Thực hành tốt (Good Practices) ¶**
+Khi xem qua các ví dụ trên, bạn có thể có một vài câu hỏi:
+
+*   `archsimd.X86.AVX512GFNI()` là gì, và tôi có thể bỏ qua nó không?
+*   Tại sao vòng lặp strided lại được viết là `i = 0; i < len(src)-v.Len()+1; i += v.Len()`, thay vì `i = 0; i + v.Len() <= len(src); i += v.Len()`?
+*   Tại sao `Transpose8` nhận 8 tham số vector thay vì một struct hoặc một mảng `[8]archsimd.Int32x8`?
+
+Thoạt nhìn, những lựa chọn này có vẻ như là sở thích nhỏ về phong cách, nhưng mỗi lựa chọn đều được đưa ra vì một lý do quan trọng về hiệu suất hoặc tính chính xác:
+
+*   **Kiểm tra tính năng CPU (`archsimd.X86.*`, `archsimd.ARM64.*`)**
+    Trên amd64, chúng tôi cung cấp các kiểm tra tính năng tại thời điểm thực thi (runtime) như `archsimd.X86.AVX()`, `AVX2()`, `AVX512()`, và các kiểm tra phần mở rộng như `AVX512GFNI()` hoặc `AVX512VNNI()`; trên arm64, NEON luôn khả dụng, và chúng tôi cung cấp các kiểm tra cho các phần mở rộng tùy chọn như `archsimd.ARM64.PMULL()`, `SVE()`, và `SVE2()`. Trình biên dịch không biết trước liệu máy chạy binary của bạn có hỗ trợ các phần mở rộng SIMD tùy chọn hay không. Nếu bạn không bảo vệ mã SIMD của mình bằng lệnh kiểm tra tính năng thích hợp, chương trình của bạn có thể bị crash với lỗi `SIGILL` trên phần cứng thiếu hướng dẫn đó.
+
+    Quan trọng không kém, việc kiểm tra tính năng CPU đóng vai trò như những gợi ý tối ưu hóa cho trình biên dịch. Ví dụ, AVX-512 hỗ trợ merge-masking phần cứng cho các đầu ra của hướng dẫn. Cách trình biên dịch hạ cấp `x.Add(y).IfElse(m, z)` trên vector 128-bit hoặc 256-bit phụ thuộc vào việc các tính năng CPU nào được biết là khả dụng. Nếu mã không được bảo vệ bởi `archsimd.X86.AVX512()`, trình biên dịch phải phát ra một vector `VPADD` theo sau là một hướng dẫn `VPBLEND` một cách thận trọng. Tuy nhiên, bên trong một khối `if archsimd.X86.AVX512()`, trình biên dịch biết AVX-512 khả dụng và sẽ hợp nhất chuỗi đó thành một hướng dẫn `VPADD` AVX-512 merge-masked duy nhất.
+
+*   **Loại bỏ kiểm tra biên trong vòng lặp strided**
+    Cách bạn viết biên vòng lặp quyết định việc liệu lượt kiểm tra của trình biên dịch (prove pass) có thể loại bỏ các kiểm tra biên slice bên trong vòng lặp hay không. Trong `i + v.Len() <= len(src)`, phép cộng `i + v.Len()` về mặt lý thuyết có thể bị tràn thành một số nguyên âm nếu `len(src)` gần với `math.MaxInt`, điều này ngăn cản trình biên dịch chứng minh rằng `i` luôn không âm và nằm trong biên. Việc viết `i < len(src)-v.Len()+1` tránh được khả năng tràn tiềm tàng đó, cho phép thân vòng lặp được biên dịch với không còn các kiểm tra biên.
+
+*   **Giữ vector trong các thanh ghi (tránh các kiểu phức hợp lớn)**
+    `Transpose8` truyền 8 tham số vector thay vì một struct có 8 trường hoặc một mảng `[8]archsimd.Int32x8` vì ABI và backend SSA của Go hiện tại đặt các kiểu phức hợp lớn trong bộ nhớ thay vì trong các thanh ghi (một vấn đề đã biết được theo dõi tại #24416). Vì các vector SIMD có kích thước từ 16 đến 64 byte mỗi cái, việc đẩy chúng xuống ngăn xếp (stack spilling) gây tổn hại đến hiệu suất nhiều hơn nhiều so với việc đẩy các giá trị vô hướng. Điều này áp dụng cho cả tham số hàm và biến cục bộ, vì vậy hãy tránh bọc các vector SIMD bên trong các mảng hoặc struct lớn trong các vòng lặp nóng (hot loops). Hiện đang có những nỗ lực để thúc đẩy việc truy cập bộ nhớ phức hợp quay trở lại các thanh ghi, điều này vẫn chưa được áp dụng trong Go 1.27.
+
+**Trải nghiệm thử ¶**
+Trong Go 1.27, `GOEXPERIMENT=simd` hỗ trợ amd64 (AVX, AVX2 và AVX-512), arm64 (NEON) và wasm (WebAssembly 128-bit SIMD) ngay khi cài đặt. Cho dù bạn đang dùng máy Intel/AMD, máy chủ arm64 hoặc Apple Silicon Mac (M1/M2/M3/M4), hoặc hướng tới WebAssembly, bạn có thể thử `archsimd` một cách tự nhiên ngay lập tức:
+
+`GOEXPERIMENT=simd go test simd/archsimd/...`
+
+Bạn cũng có thể cross-test wasm (hoặc amd64 thông qua mô phỏng Rosetta trên Apple Silicon) bằng cách thiết lập `GOARCH`:
+
+`# Chạy các bài kiểm tra wasm SIMD bằng runtime WASI:`
+`GOOS=wasip1 GOARCH=wasm GOEXPERIMENT=simd go test simd/archsimd/...`
+
+`# Hoặc chạy các bài kiểm tra amd64 AVX2 trên Apple Silicon thông qua Rosetta:`
+`GOARCH=amd64 GOEXPERIMENT=simd go test simd/archsimd/...`
+
+Chúng tôi quan tâm đến tất cả các loại phản hồi! Những người dùng sớm đã giúp chúng tôi phát hiện ra các lỗi (như #77582) và xác định những nơi mà việc tạo mã hoặc công thái học (ergonomics) của API có thể được cải thiện. Chúng tôi đã cố gắng chọn những cái tên rõ ràng, nhất quán và bao hàm các hướng dẫn hữu ích nhất, nhưng `archsimd` là một bề mặt API khổng lồ và luôn có chỗ để cải thiện.
+
+**Công việc trong tương lai ¶**
+Đối với Go 1.28 và xa hơn, chúng tôi đang tích cực làm việc để hoàn thiện hỗ trợ arm64 SVE và SVE2 trong `archsimd` (giới thiệu các kiểu vector có thể mở rộng không phụ thuộc độ rộng như `archsimd.Float32s` được hỗ trợ trực tiếp bởi các thanh ghi và predicate SVE của phần cứng) và kết nối nó vào `simd`. Chúng tôi cũng dự định mở rộng `archsimd` sang các kiến trúc bổ sung như `riscv64`, `ppc64`, `s390x` và `loong64`, cải thiện việc thăng cấp thanh ghi (register promotion) cho các kiểu phức hợp, và tiếp tục bổ sung các hướng dẫn và tối ưu hóa trình biên dịch dựa trên phản hồi từ cộng đồng.

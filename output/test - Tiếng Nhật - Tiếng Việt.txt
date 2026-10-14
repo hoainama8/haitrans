@@ -1,0 +1,5 @@
+Cửa sổ được tạo bằng cách sử dụng `App.NewWindow()` và cần được hiển thị bằng hàm `Show()`. Bằng cách sử dụng `ShowAndRun()`, một phương thức trợ giúp của `fyne.Window`, bạn có thể vừa hiển thị cửa sổ vừa chạy ứng dụng cùng một lúc.
+
+Theo mặc định, cửa sổ sẽ có kích thước phù hợp để hiển thị nội dung bằng cách kiểm tra hàm `MinSize()` (chi tiết sẽ được giải thích trong các ví dụ sau).
+Bằng cách gọi phương thức `Window.Resize()`, bạn có thể thiết lập một kích thước lớn hơn.
+Phương thức này nhận vào một `fyne.Size` bao gồm chiều rộng và chiều cao sử dụng các pixel độc lập với thiết bị (nghĩa là kích thước sẽ như nhau trên các thiết bị khác nhau). Ví dụ, để đặt cửa sổ mặc định thành hình vuông, bạn có thể làm như sau:

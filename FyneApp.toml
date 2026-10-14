@@ -1,0 +1,8 @@
+Website = "https://example.com"
+
+[Details]
+Icon = "myapp.png"
+Name = "HaiTranslator"
+ID = "com.example.app"
+Version = "1.0.1"
+Build = 4

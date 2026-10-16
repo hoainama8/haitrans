@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	"image/color"
 	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
@@ -22,7 +20,7 @@ type attachedDocument struct {
 var document *attachedDocument
 var sourceName string
 
-func Control(outputEditor *widget.Entry, myWindow fyne.Window, Lang []string, models []string, refreshInputColumn func()) fyne.CanvasObject {
+func Control(outputEditor *widget.Entry, myWindow fyne.Window, Lang []string, models []string, refreshInputColumn func(), inputDirectory string, outDirectory string) fyne.CanvasObject {
 	tokenUsagePath, pathErr := defaultTokenUsagePath()
 	if pathErr != nil {
 		tokenUsagePath = "token_usage.json"
@@ -131,19 +129,18 @@ func Control(outputEditor *widget.Entry, myWindow fyne.Window, Lang []string, mo
 		//widget.NewFormItem("Lựa chọn:", radio),
 		//widget.NewFormItem("Chọn:", combo),
 	)
-	bgColor := color.NRGBA{R: 92, G: 51, B: 23, A: 255} // Màu hổ phách // Màu xanh nhạt
-	//bg := canvas.NewRectangle(bgColor)
+
 	center1 := container.NewVBox(
 		container.NewCenter(attachmentSection),
 		optionsForm,
 		container.NewCenter(translateBtn),
 		progressBar,
 	)
-	center2 := container.NewVBox(
+	center2 := container.NewVBox(container.NewCenter(container.NewHBox(OpenDir(inputDirectory, myWindow), OpenDir(outDirectory, myWindow))),
 		widget.NewCard("Token phiên này", "Số token đã dùng từ khi mở ứng dụng", sessionTokensLabel),
 		widget.NewCard("Tổng token đã dùng", "Tích lũy qua các lần sử dụng", totalTokensLabel),
 	)
 	centerColumn := container.NewGridWithColumns(2, center1, center2)
-	center_green := container.NewStack(canvas.NewRectangle(bgColor), centerColumn)
-	return center_green
+	//center_green := container.NewStack(canvas.NewHorizontalGradient(color.NRGBA{R: 92, G: 51, B: 23, A: 255} , color.White), centerColumn)
+	return centerColumn
 }

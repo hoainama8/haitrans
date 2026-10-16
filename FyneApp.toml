@@ -1,8 +1,8 @@
-Website = "https://example.com"
+Website = "https://VND.com"
 
 [Details]
 Icon = "myapp.png"
 Name = "HaiTranslator"
-ID = "com.example.app"
+ID = "xxx.YYY.app"
 Version = "1.0.1"
-Build = 4
+Build = 6

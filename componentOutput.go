@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
@@ -18,10 +20,21 @@ func createOutputColumn(app fyne.App, outputEditor *widget.Entry) fyne.CanvasObj
 			dialog.ShowInformation("Thành công", "Đã sao chép kết quả vào Clipboard!", app.Driver().AllWindows()[0])
 		}
 	})
-
+	toolbar := widget.NewToolbar(
+		widget.NewToolbarAction(theme.DocumentCreateIcon(), func() {
+			log.Println("New document")
+		}),
+		widget.NewToolbarSeparator(),
+		widget.NewToolbarAction(theme.ContentCutIcon(), func() {}),
+		widget.NewToolbarAction(theme.ContentCopyIcon(), func() {}),
+		widget.NewToolbarAction(theme.ContentPasteIcon(), func() {}),
+		widget.NewToolbarSpacer(),
+		widget.NewToolbarAction(theme.HelpIcon(), func() {
+			log.Println("Display help")
+		}))
 	//rightPanelBg := canvas.NewRectangle(color.NRGBA{R: 255, G: 248, B: 235, A: 255})
 	rightColumn := container.NewBorder(
-		nil,
+		toolbar,
 		container.NewHBox(copyBtn),
 		nil, nil,
 		container.NewThemeOverride(

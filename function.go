@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -13,13 +15,30 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// Mở thư mục được chỉ định
+func OpenDir(dir string, myWindow fyne.Window) *widget.Button {
+	return widget.NewButtonWithIcon("Mở thư mục input", theme.FolderOpenIcon(), func() {
+		URL := &url.URL{
+			Scheme: "file",
+			Path:   filepath.ToSlash(dir),
+		}
+		if err := fyne.CurrentApp().OpenURL(URL); err != nil {
+			dialog.ShowError(fmt.Errorf("không thể mở thư mục input: %w", err), myWindow)
+
+		}
+	})
+
+}
+
 //var maxDocumentSize int = 100 * 1024 * 1024 // 100 MB
 
 func MakeDocumentList(directory string) (fyne.CanvasObject, func()) {
 	var files []string
 	fileList := widget.NewList(
 		func() int { return len(files) },
-		func() fyne.CanvasObject { return widget.NewLabelWithStyle("Document name", fyne.TextAlignLeading, fyne.TextStyle{}) },
+		func() fyne.CanvasObject {
+			return widget.NewLabelWithStyle("Document name", fyne.TextAlignLeading, fyne.TextStyle{})
+		},
 		func(index widget.ListItemID, item fyne.CanvasObject) {
 			item.(*widget.Label).SetText(files[index])
 		},

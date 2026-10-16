@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"mime"
 	"os"
 	"path/filepath"
@@ -9,8 +10,10 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -86,7 +89,7 @@ func main() {
 	rightColumn := createOutputColumn(myApp, outputEditor)
 
 	// CỘT 2: GIỮA
-	centerColumn := Control(outputEditor, myWindow, Lang, models, refreshInputColumn)
+	centerColumn := Control(outputEditor, myWindow, Lang, models, refreshInputColumn, directories.input, directories.output)
 	if desk, ok := myApp.(desktop.App); ok {
 		m := fyne.NewMenu("MyApp",
 			fyne.NewMenuItem("Show", func() {
@@ -99,8 +102,16 @@ func main() {
 		centerColumn,
 		rightColumn,
 	)
-
-	myWindow.SetContent(container.NewPadded(mainContent))
+	lgCustom := layout.CustomPaddedLayout{
+		TopPadding:   20,
+		LeftPadding:  20,
+		RightPadding: 20,
+	}
+	myWindow.SetContent(container.New(lgCustom, container.NewStack(
+		canvas.NewRadialGradient(
+			color.NRGBA{R: 92, G: 51, B: 23, A: 250},
+			color.NRGBA{R: 90, G: 70, B: 65, A: 220}),
+		mainContent)))
 	myWindow.Resize(fyne.NewSize(1200, 650))
 	// myWindow.SetCloseIntercept(func() {
 	// 	myWindow.Hide()
